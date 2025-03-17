@@ -15,8 +15,6 @@ class ButtonGrid(QWidget):
     def initUI(self):
         # Create a vertical layout to hold the grid and the input field with submit button
         main_layout = QVBoxLayout()
-
-        # Create grid layout for buttons
         grid = QGridLayout()
         # Define the grid dimensions (for example, 40 rows and 15 columns)
         rows, cols = 40, 15
@@ -30,6 +28,12 @@ class ButtonGrid(QWidget):
             pos = positions[i]
             button.grid_pos = pos
             self.button_coords[i + 1] = pos
+
+            # Initialize custom variables
+            button.current_ships = 0
+            button.ship_production = random.randint(1, 10)
+            button.defense_factor = round(random.uniform(0.1, 0.5), 2)
+            button.owner = "Unclaimed"
 
             grid.addWidget(button, pos[0], pos[1])
             button.clicked.connect(partial(self.openMenu, button))
@@ -53,11 +57,17 @@ class ButtonGrid(QWidget):
         main_layout.addLayout(hbox)
 
         self.setLayout(main_layout)
-        self.setWindowTitle('80 Buttons Grid')
+        self.setWindowTitle('Risiko2py')
 
     def openMenu(self, button):
-        # Create a menu and add actions
+        # Create a menu and add actions that display the button's variable values.
         menu = QMenu(self)
+        menu.addAction(f"Current Ships: {button.current_ships}")
+        menu.addAction(f"Ship Production: {button.ship_production}")
+        menu.addAction(f"Defense Factor: {button.defense_factor}")
+        menu.addAction(f"Owner: {button.owner}")
+        # You can also add additional actions if needed
+        menu.addSeparator()
         menu.addAction("Action 1")
         menu.addAction("Action 2")
         menu.addAction("Action 3")
