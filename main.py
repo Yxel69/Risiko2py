@@ -73,9 +73,7 @@ class ButtonGrid(QWidget):
         dialog = QDialog(self)
         dialog.setWindowTitle("Game Menu")
         layout = QVBoxLayout()
-        # Display current game year.
-        year_label = QLabel(f"Current Game Year: {self.year}")
-        layout.addWidget(year_label)
+        
         
         start_btn = QPushButton("Start New Game")
         load_btn = QPushButton("Load Game")
@@ -84,13 +82,16 @@ class ButtonGrid(QWidget):
         # For a new game, ask for owner name and assign a system.
         start_btn.clicked.connect(lambda: self.startNewGame(dialog))
         load_btn.clicked.connect(lambda: [self.loadGame(), dialog.accept()])
-        close_btn.clicked.connect(lambda: [self.close(), dialog.reject()])
+        close_btn.clicked.connect(lambda: dialog.reject())
         
         layout.addWidget(start_btn)
         layout.addWidget(load_btn)
         layout.addWidget(close_btn)
         dialog.setLayout(layout)
-        dialog.exec_()
+        
+        if dialog.exec_() == QDialog.Rejected:
+            # Exit the application if the dialog is closed without choosing an option.
+            QApplication.instance().quit()
     
     def startNewGame(self, dialog):
         self.choosePlayerOwner()
@@ -123,27 +124,24 @@ class ButtonGrid(QWidget):
                 with open(filename, "r", newline="") as csvfile:
                     reader = csv.reader(csvfile)
                     rows = list(reader)
-                # Determine separator index between systems and fleets.
+                
+                # Load player info
+                player_info = rows[0]
+                if len(player_info) >= 4 and player_info[0] == "Player Owner":
+                    self.player_owner = player_info[1]
+                    self.player_color = player_info[3]
+                
+                # Find separator index between systems and fleets
                 sep_index = None
                 for i, row in enumerate(rows):
                     if not any(cell.strip() for cell in row):
                         sep_index = i
                         break
-                if sep_index is None:
-                    systems = rows[1:]
-                    fleets = []
-                else:
-                    systems = rows[1:sep_index]
-                    fleets = rows[sep_index+2:] if sep_index+1 < len(rows) else []
                 
-                owner_colors = {
-                    "Owner A": "#FFCCCC",
-                    "Owner B": "#CCFFCC",
-                    "Owner C": "#CCCCFF",
-                    "Owner D": "#FFFFCC",
-                    "Owner E": "#CCFFFF"
-                }
-                # Update each system.
+                systems = rows[2:sep_index]
+                fleets = rows[sep_index+2:] if sep_index+1 < len(rows) else []
+                
+                # Load systems
                 for sys_row in systems:
                     if len(sys_row) >= 8 and sys_row[0] == "System":
                         sys_id = int(sys_row[1])
@@ -153,12 +151,22 @@ class ButtonGrid(QWidget):
                             button.ship_production = int(sys_row[3])
                             button.defense_factor = float(sys_row[4])
                             button.owner = sys_row[5]
-                            button.grid_pos = sys_row[6]
-                            if button.owner in owner_colors:
-                                button.setStyleSheet(f"background-color: {owner_colors[button.owner]};")
+                            button.grid_pos = eval(sys_row[6])  # Convert string back to tuple
+                            if button.owner == self.player_owner:
+                                button.setStyleSheet(f"background-color: {self.player_color};")
+                            else:
+                                owner_colors = {
+                                    "Owner A": "#FFCCCC",
+                                    "Owner B": "#CCFFCC",
+                                    "Owner C": "#CCCCFF",
+                                    "Owner D": "#FFFFCC",
+                                    "Owner E": "#CCFFFF"
+                                }
+                                button.setStyleSheet(f"background-color: {owner_colors.get(button.owner, '#FFFFFF')};")
                 if systems:
                     self.year = int(systems[0][7])
                 
+                # Load fleets
                 self.fleets = []
                 for fleet_row in fleets:
                     if len(fleet_row) >= 7 and fleet_row[0] == "Fleet":
@@ -171,7 +179,7 @@ class ButtonGrid(QWidget):
                             "year": int(fleet_row[6])
                         }
                         self.fleets.append(fleet)
-                        
+                
                 QMessageBox.information(self, "Load Game", f"Game loaded from {filename}.\nGame state updated.")
             except Exception as e:
                 QMessageBox.warning(self, "Load Error", str(e))
@@ -268,6 +276,17 @@ class ButtonGrid(QWidget):
         self.input_field.returnPressed.connect(self.processFleetInput)
         self.input_field.setFocus()
     
+    def startDistanceCalculation(self):
+        self.distance_inputs = []
+        self.input_field.clear()
+        self.input_field.setPlaceholderText("Enter first system id for distance calculation")
+        try:
+            self.input_field.returnPressed.disconnect()
+        except Exception:
+            pass
+        self.input_field.returnPressed.connect(self.processDistanceInput)
+        self.input_field.setFocus()
+
     def processDistanceInput(self):
         try:
             text = self.input_field.text().strip()
@@ -346,9 +365,22 @@ class ButtonGrid(QWidget):
     
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_F:
-            self.startFleetSend()
+            self.startFleetSend()  # Existing functionality for sending fleets
+        elif event.key() == Qt.Key_S:
+            self.toggleSaveGame()  # Save game functionality
+        elif event.key() == Qt.Key_E:
+            self.startDistanceCalculation()  # Start distance calculation
+        elif event.key() == Qt.Key_I:
+            self.openGameMenuAtStart()  # Open the game menu
         else:
             super().keyPressEvent(event)
+
+    def startDistanceInput(self):
+        self.distance_inputs = []
+        self.input_field.clear()
+        self.input_field.setPlaceholderText("Enter first button number")
+        self.input_field.returnPressed.connect(self.processDistanceInput)
+        self.input_field.setFocus()
     
     def startFleetSend(self):
         # Begin fleet sending via the F key.
@@ -363,7 +395,6 @@ class ButtonGrid(QWidget):
         self.input_field.setFocus()
 
     def toggleSaveGame(self):
-        from PyQt5.QtWidgets import QInputDialog
         filename, ok = QInputDialog.getText(self, "Save Game", "Enter save file name:")
         if ok and filename.strip():
             if not filename.lower().endswith(".csv"):
@@ -371,23 +402,28 @@ class ButtonGrid(QWidget):
             try:
                 with open(filename, "w", newline="") as csvfile:
                     writer = csv.writer(csvfile)
-                    # Save player info.
-                    writer.writerow(["Player Owner", self.player_owner, "Player Color", self.player_color])
-                    writer.writerow([])  # Blank line separator.
                     
-                    # Write systems header and rows.
+                    # Save player info
+                    writer.writerow(["Player Owner", self.player_owner, "Player Color", self.player_color])
+                    writer.writerow([])  # Blank line separator
+                    
+                    # Save systems
                     writer.writerow(["Type", "ID", "Current Ships", "Ship Production", "Defense Factor", "Owner", "Grid Position", "Year"])
                     for sys_id, button in self.buttons.items():
-                        writer.writerow(["System", sys_id, button.current_ships, button.ship_production, 
-                                         button.defense_factor, button.owner, button.grid_pos, self.year])
-                    writer.writerow([])  # Blank line separator.
+                        writer.writerow([
+                            "System", sys_id, button.current_ships, button.ship_production,
+                            button.defense_factor, button.owner, button.grid_pos, self.year
+                        ])
+                    writer.writerow([])  # Blank line separator
                     
-                    # Write fleets header and rows.
+                    # Save fleets
                     writer.writerow(["Type", "Source", "Destination", "Ships", "Turns", "Owner", "Year"])
                     if hasattr(self, "fleets"):
                         for fleet in self.fleets:
-                            writer.writerow(["Fleet", fleet["source"], fleet["destination"], 
-                                             fleet["ships"], fleet["turns"], fleet["owner"], self.year])
+                            writer.writerow([
+                                "Fleet", fleet["source"], fleet["destination"], fleet["ships"],
+                                fleet["turns"], fleet["owner"], fleet["year"]
+                            ])
                 QMessageBox.information(self, "Save Game", f"Game state saved to {filename}")
             except Exception as e:
                 QMessageBox.warning(self, "Save Error", str(e))
@@ -401,4 +437,3 @@ if __name__ == '__main__':
     window.openGameMenuAtStart()
     window.showMaximized()
     sys.exit(app.exec_())
-
