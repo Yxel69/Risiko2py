@@ -42,15 +42,9 @@ class ButtonGrid(QWidget):
             button.current_ships = 0
             button.ship_production = random.randint(1, 10)
             button.defense_factor = round(random.uniform(0.7, 1.0), 2)
-            button.owner = random.choice(self.owners)
-            owner_colors = {
-                "Owner A": "#FFCCCC",
-                "Owner B": "#CCFFCC",
-                "Owner C": "#CCCCFF",
-                "Owner D": "#FFFFCC",
-                "Owner E": "#CCFFFF"
-            }
-            button.setStyleSheet(f"background-color: {owner_colors.get(button.owner, '#FFFFFF')};")
+            # No owner is assigned by default.
+            button.owner = None
+            button.setStyleSheet("background-color: #FFFFFF;")
             
             self.grid.addWidget(button, pos[0], pos[1])
             button.installEventFilter(self)
@@ -334,6 +328,8 @@ class ButtonGrid(QWidget):
             self.openGameMenuAtStart()  # Open the game menu
         elif event.key() == Qt.Key_C:
             self.clearAllButtons()  # Clear all buttons from the GUI
+        elif event.key() == Qt.Key_J:
+            self.nextTurn()  # Next turn functionality
         else:
             super().keyPressEvent(event)
 
@@ -460,7 +456,7 @@ class ButtonGrid(QWidget):
                         if button.owner == self.player_owner:
                             button.setStyleSheet(f"background-color: {self.player_color};")
                         else:
-                            button.setStyleSheet(f"background-color: {owner_colors.get(button.owner, '#FFFFFF')};")
+                            button.setStyleSheet("background-color: #FFFFFF;")
             if system_rows:
                 self.year = int(system_rows[0][7])
             
@@ -483,13 +479,20 @@ class ButtonGrid(QWidget):
             QMessageBox.warning(self, "Refresh Error", str(e))
 
     def loadGame(self):
-        from PyQt5.QtWidgets import QFileDialog
+        from PyQt5.QtWidgets import QFileDialog, QInputDialog
         try:
             # Ask user to select a folder containing the saved game.
             folder = QFileDialog.getExistingDirectory(self, "Load Game Folder")
             if not folder:
                 QMessageBox.information(self, "Load Game", "No folder selected, load cancelled.")
                 return
+
+            # Ask for player's name.
+            player_name, ok = QInputDialog.getText(self, "Player Name", "Enter your player name:")
+            if not ok or not player_name.strip():
+                QMessageBox.warning(self, "Load Game", "No player name provided, load cancelled.")
+                return
+            self.player_owner = player_name.strip()
 
             # Load player info.
             player_file = os.path.join(folder, "player.csv")
@@ -499,12 +502,13 @@ class ButtonGrid(QWidget):
             with open(player_file, "r", newline="") as csvfile:
                 reader = csv.reader(csvfile)
                 row = next(reader)
-                if row and row[0] == "Player Owner":
-                    self.player_owner = row[1]
-                    self.player_color = row[3]
-                else:
-                    QMessageBox.warning(self, "Load Error", "Player info is invalid.")
-                    return
+                # Expected format: ["Player Owner", saved_name, "Player Color", saved_color]
+                saved_name = row[1]
+                saved_color = row[3]
+                if saved_name != self.player_owner:
+                    QMessageBox.warning(self, "Load Warning", 
+                        f"Save game player name '{saved_name}' does not match provided name '{self.player_owner}'. Using provided name.")
+                self.player_color = saved_color
 
             # Load systems.
             systems_file = os.path.join(folder, "systems.csv")
@@ -538,22 +542,14 @@ class ButtonGrid(QWidget):
                             else:
                                 button.grid_pos = self.button_coords.get(sys_id)
                             
-                            owner_colors = {
-                                "Owner A": "#FFCCCC",
-                                "Owner B": "#CCFFCC",
-                                "Owner C": "#CCCCFF",
-                                "Owner D": "#FFFFCC",
-                                "Owner E": "#CCFFFF"
-                            }
                             if button.owner == self.player_owner:
                                 button.setStyleSheet(f"background-color: {self.player_color};")
                             else:
-                                button.setStyleSheet(f"background-color: {owner_colors.get(button.owner, '#FFFFFF')};")
+                                button.setStyleSheet("background-color: #FFFFFF;")
             # Set game year based on first system row.
             with open(systems_file, "r", newline="") as csvfile:
                 reader = list(csv.reader(csvfile))
                 if len(reader) > 1:
-                    # Assumes 'Year' column is the 8th element.
                     self.year = int(reader[1][7])
 
             # Load fleets.
@@ -605,21 +601,16 @@ class ButtonGrid(QWidget):
         self.repaint()
 
 if __name__ == '__main__':
-    num_planets, owners = load_worldgen_options()
     app = QApplication(sys.argv)
     
     # --- Show the game menu first ---
     menu_dialog = QDialog()
     menu_dialog.setWindowTitle("Game Menu")
     vbox = QVBoxLayout(menu_dialog)
-    # Game starts at year 1 by default.
-    year_label = QLabel("Current Game Year: 1")
-    vbox.addWidget(year_label)
     
     # Dictionary to store the player's choice.
     choice = {"option": None}
     
-    # Define actions.
     btnNew = QPushButton("Start New Game")
     btnLoad = QPushButton("Load Game")
     btnExit = QPushButton("Exit")
@@ -648,14 +639,20 @@ if __name__ == '__main__':
         sys.exit(0)
     
     # --- Now create the main game window ---
-    window = ButtonGrid(num_buttons=num_planets, owners=owners)
-    
     if choice["option"] == "new":
-        # Start new game: ask for owner name and assign a system.
+        # Ask for number of systems.
+        num_systems, ok = QInputDialog.getInt(None, "Systems", "Enter number of systems:", 80, 10, 200)
+        if not ok:
+            sys.exit(0)
+        # Create the game window with the chosen number of systems.
+        window = ButtonGrid(num_buttons=num_systems)
+        # Let the user choose their owner name.
         window.choosePlayerOwner()
+        # Randomly assign one system (planet) to the current player.
         window.assignPlayerSystem()
     elif choice["option"] == "load":
-        # Load game: open file dialog and import systems and fleets.
+        # Create a default instance. (The saved game will update systems and fleets.)
+        window = ButtonGrid()
         window.loadGame()
     
     window.showMaximized()
