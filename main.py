@@ -5,7 +5,7 @@ import math
 import csv
 from PyQt5.QtWidgets import (QApplication, QWidget, QPushButton, QGridLayout, 
                              QVBoxLayout, QLineEdit, QHBoxLayout, QMenu, QMessageBox, QInputDialog, QDialog, QFileDialog, QLabel)
-from PyQt5.QtGui import QCursor
+from PyQt5.QtGui import QCursor, QIcon
 from PyQt5.QtCore import Qt, QEvent
 from functools import partial
 
@@ -15,6 +15,7 @@ from worldgen import load_worldgen_options
 class ButtonGrid(QWidget):
     def __init__(self, num_buttons=80, owners=None):
         super().__init__()
+        self.setWindowIcon(QIcon("designs/icon.png"))  # Set your custom icon.
         self.year = 1  # Initialize game year.
         self.num_buttons = num_buttons
         # Use provided owners or fallback.
@@ -182,11 +183,24 @@ class ButtonGrid(QWidget):
             QMessageBox.information(self, "Starting Planet Assigned",
                 f"System {sys_id} is now assigned to {owner}.")
     
+    def assignPiratePlanets(self):
+        """
+        For every system (button) not already owned, assign it to 'Pirates'
+        with a 20% probability. Pirates are not added to the player list or owner_colors.
+        """
+        for sys_id, button in self.buttons.items():
+            if button.owner is None and random.random() < 0.35:
+                button.owner = "Pirates"
+                
+                # Use a fixed style for Pirate-owned systems (e.g., gray).
+                button.setStyleSheet("background-color: #FFFFFF;")
+
     def nextTurn(self):
         # Increase ships per system.
         for num, button in self.buttons.items():
-            button.current_ships += button.ship_production
-        # Process fleets...
+            if (button.owner is not None):
+                button.current_ships += button.ship_production
+            # Process fleets...
         # (Existing fleet processing code here.)
         QMessageBox.information(self, "Turn Ended", "Production added and fleets processed!")
         self.year += 1
@@ -360,10 +374,9 @@ class ButtonGrid(QWidget):
         elif event.key() == Qt.Key_I:
             self.openGameMenuAtStart()  # Open the game menu.
         elif event.key() == Qt.Key_C:
-            self.clearAllButtons()  # Clear all buttons from the GUI.
+            self.changeOwner()  # Change current owner.
         elif event.key() == Qt.Key_J:
-            # Call readyNextTurn when J is pressed.
-            self.readyNextTurn()
+            self.readyNextTurn()  # Proceed when players are ready.
         else:
             super().keyPressEvent(event)
 
@@ -733,8 +746,10 @@ if __name__ == '__main__':
         window = ButtonGrid(num_buttons=num_systems, owners=players)
         # Let the user choose which owner they will be.
         window.choosePlayerOwner()
-        # Randomly assign one system (planet) to the current player.
+        # Randomly assign one system (planet) to each player.
         window.assignStartingPlanets()
+        # Additionally, assign remaining systems to Pirates with 20% chance.
+        window.assignPiratePlanets()
     elif choice["option"] == "load":
         # Create a default instance. (The saved game will update systems and fleets.)
         window = ButtonGrid()
