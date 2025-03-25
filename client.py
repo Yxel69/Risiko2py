@@ -5,7 +5,7 @@ import math
 import socket
 import threading
 import json
-from PyQt5.QtWidgets import (QApplication, QWidget, QPushButton, QGridLayout,
+from PyQt5.QtWidgets import (QApplication, QWidget, QPushButton, QGridLayout, 
     QVBoxLayout, QLineEdit, QHBoxLayout, QMenu, QMessageBox, QInputDialog, QDialog, QLabel)
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QEvent, pyqtSignal, QObject
@@ -24,11 +24,11 @@ class ButtonGrid(QWidget):
         self.player_name = player_name
         self.num_buttons = 80
         self.owners = []  # List of player names in session.
-        self.owner_colors = {}
-        self.button_coords = {}  
-        self.buttons = {}        
-        self.fleets = []
-        self.ready_set = set()
+        self.owner_colors = {}  # Map owner -> unique color.
+        self.button_coords = {}  # Map system id -> grid position.
+        self.buttons = {}        # Map system id -> QPushButton.
+        self.fleets = []         # Fleet list.
+        self.ready_set = set()   # Track players ready for next turn.
         self.initUI()
         self.network_signals = NetworkSignals()
         self.network_signals.gameUpdate.connect(self.handleServerMessage)
@@ -43,12 +43,12 @@ class ButtonGrid(QWidget):
         rows, cols = 40, 15
         positions = [(row, col) for row in range(rows) for col in range(cols)]
         random.shuffle(positions)
-        for i in range(self.num_buttons):
-            button = QPushButton(str(i+1))
-            pos = positions[i]
+        for i in range(1, self.num_buttons+1):
+            button = QPushButton(str(i))
+            pos = positions[i-1]
             button.grid_pos = pos
-            self.button_coords[i+1] = pos
-            self.buttons[i+1] = button
+            self.button_coords[i] = pos
+            self.buttons[i] = button
             button.current_ships = 0
             button.ship_production = random.randint(1, 10)
             button.defense_factor = round(random.uniform(0.7, 1.0), 2)
@@ -58,7 +58,7 @@ class ButtonGrid(QWidget):
             button.installEventFilter(self)
         main_layout.addLayout(self.grid)
         
-        # Control buttons.
+        # Control buttons and input field.
         hbox = QHBoxLayout()
         self.input_field = QLineEdit()
         self.input_field.setMinimumHeight(40)
@@ -101,21 +101,26 @@ class ButtonGrid(QWidget):
 
     def handleServerMessage(self, message):
         if message.startswith("CREATED"):
+            # Format: CREATED <session_id> START <planet_id>
             parts = message.split()
             self.session_id = parts[1]
             assigned = parts[3] if len(parts) >= 4 else "None"
             self.info_label.setText(f"Session {self.session_id}: You are creator; starting planet {assigned}")
-            self.owners.append(self.player_name)
+            if self.player_name not in self.owners:
+                self.owners.append(self.player_name)
+                self.owner_colors[self.player_name] = "#{:06X}".format(random.randint(0, 0xFFFFFF))
         elif message.startswith("JOINED"):
             parts = message.split()
             self.session_id = parts[1]
             assigned = parts[3] if len(parts) >= 4 else "None"
             self.info_label.setText(f"Session {self.session_id}: Joined as {self.player_name}; starting planet {assigned}")
-            self.owners.append(self.player_name)
+            if self.player_name not in self.owners:
+                self.owners.append(self.player_name)
+                self.owner_colors[self.player_name] = "#{:06X}".format(random.randint(0, 0xFFFFFF))
         elif message.startswith("SESSIONS"):
             try:
                 sessions = json.loads(message[len("SESSIONS "):])
-                s = "\n".join([f"{sess['session_id']}: {sess['planet_count']} planets, Year {sess['year']}, Players {sess['player_count']}" 
+                s = "\n".join([f"{sess['session_id']}: {sess['planet_count']} planets, Year {sess['year']}, Players {sess['player_count']}"
                                 for sess in sessions])
                 QMessageBox.information(self, "Available Games", s if s else "No games available")
             except Exception as e:
@@ -282,7 +287,7 @@ class ButtonGrid(QWidget):
                     self.input_field.clear()
                     self.fleet_inputs = []
                     raise ValueError("Fleet must be larger than 5 ships.")
-                QMessageBox.information(self, "Fleet Launched", f"Fleet from {src} to {dest} of {ships} ships.")
+                QMessageBox.information(self, "Fleet Launched", f"Fleet from {src} to {dest} of {ships} ships launched.")
                 self.input_field.clear()
                 self.input_field.returnPressed.disconnect(self.processFleetInput)
                 self.fleet_inputs = []
@@ -292,7 +297,7 @@ class ButtonGrid(QWidget):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     
-    # New menu dialog: "Create Game" or "Join Game"
+    # --- Game Menu Dialog ---
     menu_dialog = QDialog()
     menu_dialog.setWindowTitle("Game Menu")
     vbox = QVBoxLayout(menu_dialog)

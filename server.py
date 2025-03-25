@@ -33,22 +33,21 @@ def new_game_state(planet_count, creator, player_name):
             "ship_production": 0,
             "defense_factor": 0,
             "grid_pos": (0,0),
-            "color": None  # This will be set when a system is assigned to a player.
+            "color": None  # Will be set when the system is assigned.
         }
     return state
 
 def assign_starting_planet(state, player_name):
     """
-    Randomly choose an unowned system and assign it as the starting planet for
-    player_name using the same values as in main.py.
-    Also assign the player's unique color to the system.
-    Returns the system id assigned or None if not available.
+    Randomly choose an unowned system and assign it as the starting planet for player_name.
+    The system is given 250 ships, production value 10, 0.5 defense, and gets the player's unique color.
+    Returns the system id assigned or None if no unowned system exists.
     """
     available = [sys_id for sys_id, sys in state["systems"].items() if sys["owner"] is None]
     if not available:
         return None
     chosen = random.choice(available)
-    # Find player's color from the players list.
+    # Lookup the player's color from the players list.
     player_color = None
     for p in state["players"]:
         if p["name"] == player_name:
@@ -63,16 +62,16 @@ def assign_starting_planet(state, player_name):
 
 def assign_pirate_planets(state, chance=0.35):
     """
-    For each unowned system in state, with a given chance, assign it to 'Pirates'.
-    Pirates do not get a unique color assigned.
+    For each unowned system in state, with a given chance, assign it to 'Pirates'
+    with predefined values. Pirate systems use a fixed gray color.
     """
     for sys_id, sys in state["systems"].items():
         if sys["owner"] is None and random.random() < chance:
             sys["owner"] = "Pirates"
-            sys["current_ships"] = 150   # Or leave at default if desired.
+            sys["current_ships"] = 150
             sys["ship_production"] = 5
             sys["defense_factor"] = 0.5
-            sys["color"] = "#808080"  # For example, gray for Pirates.
+            sys["color"] = "#808080"
 
 def save_game(session_id):
     """Save the game state for a session to a JSON file and return the filename."""
@@ -104,12 +103,11 @@ def list_sessions():
     return sessions
 
 def load_game_from_file(filename):
-    """Load a game state from a file."""
+    """Load a game state from a file and register it as an active session."""
     save_folder = os.path.join(os.getcwd(), "saves")
     full_path = os.path.join(save_folder, filename)
     with open(full_path, "r") as f:
         loaded_state = json.load(f)
-    # Also register it as an active session.
     game_sessions[loaded_state["session_id"]] = loaded_state
     return loaded_state
 
@@ -120,7 +118,6 @@ def broadcast(message, session_id, sender_socket=None):
     """Send a message to all connected clients for a given session."""
     with clients_lock:
         for client in clients:
-            # Here clients can carry their joined session id.
             if client.get("socket") != sender_socket and client.get("session_id") == session_id:
                 try:
                     client["socket"].send(message.encode('utf-8'))
@@ -128,15 +125,15 @@ def broadcast(message, session_id, sender_socket=None):
                     print(f"Broadcast error: {e}")
 
 def handle_client(client_socket, addr):
-    """Handle each client's requests. 
-    Expected commands:
+    """
+    Handle client commands. Expected commands:
       CREATE <planet_count> <player_name>
       JOIN <session_id> <player_name>
       LISTSESSIONS
       REFRESH <session_id>
       SAVE <session_id>
       LOAD <filename>
-      Other messages may be broadcast to players in the same session.
+    Other messages may be broadcast to players in the same session.
     """
     print(f"Connection from {addr}")
     client_info = {"socket": client_socket, "session_id": None, "player": None}
@@ -158,9 +155,7 @@ def handle_client(client_socket, addr):
                     planet_count = int(parts[1])
                     player_name = parts[2]
                     state = new_game_state(planet_count, creator=player_name, player_name=player_name)
-                    # Assign the creator a starting planet with the proper values.
                     sp = assign_starting_planet(state, player_name)
-                    # Also assign unowned planets to Pirates with a 35% chance.
                     assign_pirate_planets(state, chance=0.35)
                     session_id = state["session_id"]
                     game_sessions[session_id] = state
@@ -174,7 +169,6 @@ def handle_client(client_socket, addr):
                 player_name = parts[2]
                 if session_id in game_sessions:
                     state = game_sessions[session_id]
-                    # Append new player with unique color.
                     new_color = random_color()
                     state["players"].append({ "name": player_name, "color": new_color })
                     sp = assign_starting_planet(state, player_name)
