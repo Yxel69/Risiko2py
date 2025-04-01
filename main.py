@@ -10,6 +10,9 @@ from PyQt5.QtCore import Qt, QEvent
 from functools import partial
 from worldgen import load_worldgen_options
 
+# Global variable for keeping the chosen load folder.
+LOAD_FOLDER = None
+
 class ButtonGrid(QWidget):
     def __init__(self, num_buttons=80, owners=None):
         super().__init__()
@@ -585,9 +588,14 @@ class MultiGrid(QWidget):
 
     # New method: Load game state for all galaxies.
     def loadGame(self):
-        folder = QFileDialog.getExistingDirectory(self, "Select Save Folder", os.getcwd())
-        if not folder:
-            return
+        global LOAD_FOLDER
+        if LOAD_FOLDER is None:
+            folder = QFileDialog.getExistingDirectory(self, "Select Save Folder", os.getcwd())
+            if not folder:
+                return
+            LOAD_FOLDER = folder
+        else:
+            folder = LOAD_FOLDER
         # Load global players info
         players_file = os.path.join(folder, "players.csv")
         players = []
@@ -662,9 +670,14 @@ class MultiGrid(QWidget):
         QMessageBox.information(self, "Load Game", "Game state loaded successfully.")
 
 def loadGameFromFile():
-    folder = QFileDialog.getExistingDirectory(None, "Select Save Folder", os.getcwd())
-    if not folder:
-        sys.exit(0)
+    global LOAD_FOLDER
+    if LOAD_FOLDER is None:
+        folder = QFileDialog.getExistingDirectory(None, "Select Save Folder", os.getcwd())
+        if not folder:
+            sys.exit(0)
+        LOAD_FOLDER = folder
+    else:
+        folder = LOAD_FOLDER
     # Load global players info
     players_file = os.path.join(folder, "players.csv")
     players = []
