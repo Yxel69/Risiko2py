@@ -6,7 +6,7 @@ import socket
 import threading
 import json
 from PyQt5.QtWidgets import (QApplication, QWidget, QPushButton, QGridLayout, 
-    QVBoxLayout, QLineEdit, QHBoxLayout, QMenu, QMessageBox, QInputDialog, QDialog, QLabel)
+    QVBoxLayout, QLineEdit, QHBoxLayout, QMenu, QMessageBox, QInputDialog, QDialog, QLabel, QStackedWidget)
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QEvent, pyqtSignal, QObject
 from functools import partial
@@ -294,10 +294,32 @@ class ButtonGrid(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Error", str(e))
 
+class GridManager(QWidget):
+    def __init__(self, grids):
+        super().__init__()
+        self.stack = QStackedWidget()
+        for grid in grids:
+            self.stack.addWidget(grid)
+        layout = QVBoxLayout()
+        layout.addWidget(self.stack)
+        self.setLayout(layout)
+    
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Left:
+            current_index = self.stack.currentIndex()
+            new_index = (current_index - 1) % self.stack.count()
+            self.stack.setCurrentIndex(new_index)
+        elif event.key() == Qt.Key_Right:
+            current_index = self.stack.currentIndex()
+            new_index = (current_index + 1) % self.stack.count()
+            self.stack.setCurrentIndex(new_index)
+        else:
+            super().keyPressEvent(event)
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     
-    # --- Game Menu Dialog ---
+    # --- Game Menu Dialog (existing code) ---
     menu_dialog = QDialog()
     menu_dialog.setWindowTitle("Game Menu")
     vbox = QVBoxLayout(menu_dialog)
@@ -331,8 +353,8 @@ if __name__ == '__main__':
     if menu_dialog.exec_() == QDialog.Rejected or choice["option"] == "exit":
         sys.exit(0)
     
-    window = ButtonGrid()
-    
+    # --- Create one or more ButtonGrid instances based on user's choice ---
+    # For example, if creating a new game:
     if choice["option"] == "create":
         planet_count, ok = QInputDialog.getInt(None, "Planet Count", "Enter number of planets:", 80, 10, 200)
         if not ok:
@@ -340,16 +362,27 @@ if __name__ == '__main__':
         player_name, ok = QInputDialog.getText(None, "Player Name", "Enter your name:")
         if not ok or not player_name.strip():
             player_name = "Player_1"
-        window.createGame(planet_count, player_name.strip())
+        # Create two (or more) grids (e.g., for separate game views)
+        grid1 = ButtonGrid()
+        grid1.createGame(planet_count, player_name.strip())
+        # For demonstration, let grid2 be another instance (could be a different game state)
+        grid2 = ButtonGrid()
+        grid2.createGame(planet_count, player_name.strip())
+        # Wrap both grids in a GridManager to allow switching:
+        main_window = GridManager([grid1, grid2])
     elif choice["option"] == "join":
-        window.sendCommand("LISTSESSIONS")
         session_id, ok = QInputDialog.getText(None, "Join Game", "Enter Session ID to join:")
         if not ok or not session_id.strip():
             sys.exit(0)
         player_name, ok = QInputDialog.getText(None, "Player Name", "Enter your name:")
         if not ok or not player_name.strip():
             player_name = "Player_X"
-        window.joinGame(session_id.strip(), player_name.strip())
+        grid1 = ButtonGrid()
+        grid1.joinGame(session_id.strip(), player_name.strip())
+        # Optionally, create a second grid to continue switching.
+        grid2 = ButtonGrid()
+        grid2.joinGame(session_id.strip(), player_name.strip())
+        main_window = GridManager([grid1, grid2])
     
-    window.showMaximized()
+    main_window.showMaximized()
     sys.exit(app.exec_())
