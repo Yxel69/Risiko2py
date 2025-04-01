@@ -170,9 +170,37 @@ class ButtonGrid(QWidget):
                 button.setStyleSheet("background-color: #FFFFFF;")
 
     def nextTurn(self):
+        # Increase production on each system.
         for num, button in self.buttons.items():
             if button.owner is not None:
                 button.current_ships += button.ship_production
+
+        # Process fleets: decrement turns and deliver if arrival reached.
+        fleets_to_remove = []
+        for fleet in list(self.fleets):
+            fleet["turns"] -= 1
+            if fleet["turns"] <= 0:
+                dest_button = self.buttons.get(fleet["destination"])
+                if dest_button:
+                    # If the destination is unowned or owned by the same player, add ships.
+                    if dest_button.owner == fleet["owner"] or dest_button.owner is None:
+                        dest_button.current_ships += fleet["ships"]
+                        dest_button.owner = fleet["owner"]
+                        dest_button.setStyleSheet(f"background-color: {self.owner_colors.get(fleet['owner'], '#FFFFFF')};")
+                    else:
+                        # Simple combat logic: if fewer ships, take over.
+                        if fleet["ships"] > dest_button.current_ships:
+                            dest_button.owner = fleet["owner"]
+                            dest_button.current_ships = fleet["ships"] - dest_button.current_ships
+                            dest_button.setStyleSheet(f"background-color: {self.owner_colors.get(fleet['owner'], '#FFFFFF')};")
+                        else:
+                            dest_button.current_ships -= fleet["ships"]
+                fleets_to_remove.append(fleet)
+        
+        # Remove processed fleets.
+        for f in fleets_to_remove:
+            self.fleets.remove(f)
+
         QMessageBox.information(self, "Turn Ended", "Production added and fleets processed!")
         self.year += 1
         self.updateInfoLabel()
@@ -223,7 +251,7 @@ class ButtonGrid(QWidget):
         src = int(button.text())
         self.fleet_inputs = [src]
         self.input_field.clear()
-        self.input_field.setPlaceholderText("Enter destination button number")
+        self.input_field.setPlaceholderText("Enter destination system id")
         try:
             self.input_field.returnPressed.disconnect(self.processDistanceInput)
         except Exception:
@@ -354,7 +382,11 @@ class ButtonGrid(QWidget):
         self.input_field.clear()
         self.input_field.setPlaceholderText("Enter source system id for sending fleet")
         try:
-            self.input_field.returnPressed.disconnect()
+            self.input_field.returnPressed.disconnect(self.processDistanceInput)
+        except Exception:
+            pass
+        try:
+            self.input_field.returnPressed.disconnect(self.processFleetInput)
         except Exception:
             pass
         self.input_field.returnPressed.connect(self.processFleetInput)
@@ -479,7 +511,8 @@ class ButtonGrid(QWidget):
             self.nextTurn()
 
     def updateInfoLabel(self):
-        self.info_label.setText(f"Owner: {self.player_owner} | Game Year: {self.year}")
+        galaxy_num = getattr(self, 'galaxy_index', 0)
+        self.info_label.setText(f"Owner: {self.player_owner} | Game Year: {self.year} | Galaxy: {galaxy_num + 1}")
 
 # New integrated class: MultiGrid combines multiple ButtonGrids and handles arrow key navigation.
 class MultiGrid(QWidget):
@@ -511,15 +544,21 @@ class MultiGrid(QWidget):
         layout.addWidget(self.next_button)
         self.setLayout(layout)
 
+        # Set the first galaxy as current and update its info label.
+        self.stack.setCurrentIndex(0)
+        self.grids[0].updateInfoLabel()
+
     def showPreviousGalaxy(self):
         current_index = self.stack.currentIndex()
         new_index = (current_index - 1) % self.stack.count()
         self.stack.setCurrentIndex(new_index)
+        self.grids[new_index].updateInfoLabel()
 
     def showNextGalaxy(self):
         current_index = self.stack.currentIndex()
         new_index = (current_index + 1) % self.stack.count()
         self.stack.setCurrentIndex(new_index)
+        self.grids[new_index].updateInfoLabel()
 
     def keyPressEvent(self, event):
         current_grid = self.grids[self.stack.currentIndex()]
@@ -850,10 +889,9 @@ if __name__ == '__main__':
         # Create ButtonGrids (each galaxy)
         for galaxy_index in range(num_galaxies):
             grid = ButtonGrid(num_buttons=num_systems, owners=players)
-            # Set the chosen (human) owner in each grid (so it stays the same)
+            grid.galaxy_index = galaxy_index    # <-- Added property
             grid.player_owner = chosen_owner
             grid.player_color = grid.owner_colors.get(chosen_owner, "#FFFFFF")
-            # Assign starting planets using the precomputed owner_assignments.
             grid.assignStartingPlanets(galaxy_index, num_galaxies, owner_assignments)
             grid.assignPiratePlanets()
             grids.append(grid)
@@ -864,3 +902,5 @@ if __name__ == '__main__':
         main_window.loadGame()  # call loadGame on the MultiGrid instance
     main_window.showMaximized()
     sys.exit(app.exec_())
+
+
