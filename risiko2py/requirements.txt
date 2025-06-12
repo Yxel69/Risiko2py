@@ -1,0 +1,6 @@
+Flask
+Flask-SQLAlchemy
+Flask-JWT-Extended
+requests
+PyQt5
+cryptography
