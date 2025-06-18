@@ -3,13 +3,12 @@ from PyQt5.QtWidgets import (
     QMessageBox, QInputDialog, QDialog, QFileDialog, QStackedWidget, QListWidget
 )
 from PyQt5.QtCore import Qt, QEvent
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QIcon, QGuiApplication
 import random
 import math
 import os
 import csv
 import requests
-
 
 class ButtonGrid(QWidget):
     def __init__(self, num_buttons=80, owners=None, button_coords=None, owner_colors=None):
@@ -366,8 +365,6 @@ class ButtonGrid(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_F:
             self.startFleetSend()
-        elif event.key() == Qt.Key_S:
-            self.toggleSaveGame()
         elif event.key() == Qt.Key_E:
             self.startDistanceCalculation()
         elif event.key() == Qt.Key_I:
@@ -692,7 +689,7 @@ class GameUI(QWidget):
         super().__init__()
         self.client = client
         self.setWindowTitle("Risiko Game")
-        self.setGeometry(100, 100, 1200, 800)
+        self.setGeometry(100, 100, 600, 400)
         self.layout = QVBoxLayout()
         
         self.info_label = QLabel("Welcome to Risiko!")
@@ -889,7 +886,25 @@ class GameUI(QWidget):
             layout = QVBoxLayout()
             layout.addWidget(multigrid)
             win.setLayout(layout)
-            win.resize(800, 600)
+
+            # --- Ensure window fits the screen and is resizable ---
+            screen = QGuiApplication.primaryScreen()
+            screen_geometry = screen.availableGeometry()
+            min_width, min_height = 800, 600
+            max_width, max_height = screen_geometry.width(), screen_geometry.height()
+            # Set sensible minimum and maximum
+            win.setMinimumSize(min_width, min_height)
+            win.setMaximumSize(max_width, max_height)
+            # Resize to 90% of screen, but not below minimum
+            width = max(min_width, int(max_width * 0.9))
+            height = max(min_height, int(max_height * 0.9))
+            win.resize(width, height)
+            # Center the window
+            win.move(
+                screen_geometry.left() + (max_width - width) // 2,
+                screen_geometry.top() + (max_height - height) // 2
+            )
+
             win.show()
             self.loaded_game_window = win
             QMessageBox.information(self, "Game Loaded", "Game state has been loaded successfully!")

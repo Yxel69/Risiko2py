@@ -4,8 +4,8 @@ import sys
 from database import db
 
 # Check dependencies before starting the server
-# dependency_check_script = os.path.abspath(os.path.join(os.path.dirname(__file__), "../check_dependencies.py"))
-#  subprocess.check_call([sys.executable, dependency_check_script])
+dependency_check_script = os.path.abspath(os.path.join(os.path.dirname(__file__), "../check_dependencies.py"))
+subprocess.check_call([sys.executable, dependency_check_script])
 
 from flask import Flask, render_template
 from flask_jwt_extended import JWTManager
