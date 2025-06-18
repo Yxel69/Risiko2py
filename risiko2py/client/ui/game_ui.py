@@ -86,6 +86,9 @@ class ButtonGrid(QWidget):
             self.player_color = self.owner_colors.get(current, "#FFFFFF")
             QMessageBox.information(self, "Owner Changed",
                                     f"Your current owner is now '{current}' with color {self.player_color}.")
+            self.updateInfoLabel()
+            # --- Update next turn button color according to readiness ---
+            self.update_next_turn_button_color()
 
     def recreateGridLayout(self):
         while self.grid.count():
@@ -406,13 +409,12 @@ class ButtonGrid(QWidget):
             if response.status_code == 200:
                 new_state = response.json().get("state")
                 self.update_from_state(new_state)
-                self.update_next_turn_button_color(new_state)
+                # --- Set button green after declaring readiness ---
+                self.next_turn_button.setStyleSheet("background-color: #1a7f1a; color: white;")
             else:
                 QMessageBox.warning(self, "Error", f"Failed to mark ready: {response.text}")
         else:
             QMessageBox.warning(self, "Error", "Game ID or client not set.")
-        # Always update color (in case of error)
-        self.update_next_turn_button_color()
 
     def declareReadiness(self):
         if hasattr(self, 'game_id') and hasattr(self, 'client'):
@@ -466,9 +468,6 @@ class ButtonGrid(QWidget):
             button.setStyleSheet("background-color: #FFFFFF;")
 
     def update_from_state(self, state):
-        """
-        Update the grid's systems, fleets, and year from the server state.
-        """
         import json
         if isinstance(state, str):
             state = json.loads(state)
@@ -476,9 +475,11 @@ class ButtonGrid(QWidget):
         fleets = state.get("fleets", [])
         year = state.get("year", 1)
 
+        # Store previous year to detect change
+        prev_year = getattr(self, "year", 1)
+
         # Update systems (planets)
         for sys in systems:
-            # Only update systems for this galaxy
             if hasattr(self, "galaxy_index") and sys.get("galaxy") != self.galaxy_index:
                 continue
             btn = self.buttons.get(sys["system_id"])
@@ -489,43 +490,31 @@ class ButtonGrid(QWidget):
                 btn.defense_factor = sys["defense_factor"]
                 self.update_button_color(btn)
 
-        # Update fleets (if you want to display them in the UI, update self.fleets)
         self.fleets = [fleet for fleet in fleets if hasattr(self, "galaxy_index") and (
             fleet.get("source_galaxy", self.galaxy_index) == self.galaxy_index or
             fleet.get("dest_galaxy", self.galaxy_index) == self.galaxy_index
         )]
 
-        # Update year
         self.year = year
         self.updateInfoLabel()
         if hasattr(self, "year_label"):
             self.year_label.setText(f"Year: {self.year}")
 
-        # Nach dem Aktualisieren der ready_set:
-        if hasattr(self, "player_owner"):
-            self.update_next_turn_button_color()
-        self.update_next_turn_button_color(state)
+        # --- Set button red if year has advanced ---
+        if year != prev_year:
+            self.next_turn_button.setStyleSheet("background-color: #a11a1a; color: white;")
 
-    def update_next_turn_button_color(self, state=None):
-        # Determine readiness from state or fallback to ready_set
+    def update_next_turn_button_color(self):
+        # Check if the current owner is ready (in self.ready_set or via server state if available)
         ready = False
-        if state:
-            import json
-            if isinstance(state, str):
-                state = json.loads(state)
-            players = state.get("players", [])
-            for p in players:
-                if isinstance(p, dict) and p.get("owner") == self.player_owner:
-                    ready = p.get("ready", False)
-                    break
-        elif hasattr(self, "ready_set"):
+        if hasattr(self, "ready_set"):
             ready = self.player_owner in self.ready_set
-
+        # If you have a more up-to-date state (e.g. from server), check there instead.
         if ready:
             self.next_turn_button.setStyleSheet("background-color: #1a7f1a; color: white;")
         else:
             self.next_turn_button.setStyleSheet("background-color: #a11a1a; color: white;")
-
+    
 # New integrated class: MultiGrid combines multiple ButtonGrids and handles arrow key navigation.
 class MultiGrid(QWidget):
     def __init__(self, grids):

@@ -10,6 +10,7 @@ subprocess.check_call([sys.executable, dependency_check_script])
 from flask import Flask, render_template
 from flask_jwt_extended import JWTManager
 import json
+from datetime import timedelta
 
 app = Flask(__name__)
 
@@ -17,6 +18,7 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///game.db'  # Use SQLite for simplicity
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = 'your_jwt_secret_key'  # Change this to a secure key
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=180)  # default
 
 # Initialize extensions
 db.init_app(app)
