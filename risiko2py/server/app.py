@@ -3,9 +3,7 @@ import subprocess
 import sys
 from database import db
 
-# Check dependencies before starting the server
-dependency_check_script = os.path.abspath(os.path.join(os.path.dirname(__file__), "../check_dependencies.py"))
-subprocess.check_call([sys.executable, dependency_check_script])
+
 
 from flask import Flask, render_template
 from flask_jwt_extended import JWTManager
@@ -53,8 +51,12 @@ def games_list():
     return render_template('games.html', games=games_data)
 
 if __name__ == '__main__':
+    run_check = input("Check Dependencies (y/n): ").strip().lower()
+    if run_check == 'y':
+        dependency_check_script = os.path.abspath(os.path.join(os.path.dirname(__file__), "../check_dependencies.py"))
+        subprocess.check_call([sys.executable, dependency_check_script])
     with app.app_context():
         db.create_all()
-    app.run(host='127.0.0.1', port=5000, debug=True)  # Run the server on all interfaces
+    app.run(host='0.0.0.0', port=5000, debug=False)  # Run the server on all interfaces
 
 

@@ -37,9 +37,9 @@ class ButtonGrid(QWidget):
 
     def initUI(self):
         main_layout = QVBoxLayout()
-        self.info_label = QLabel(f"Owner: {getattr(self, 'player_owner', 'N/A')} | Game Year: {self.year}")
+        self.info_label = QLabel(f"Owner: {getattr(self, 'player_owner', 'N/A')} | Game Year: {getattr(self, 'year', 1)}")
         main_layout.addWidget(self.info_label)
-        self.year_label = QLabel(f"Year: {self.year}")
+        self.year_label = QLabel(f"Year: {getattr(self, 'year', 1)}")
         main_layout.addWidget(self.year_label)
         self.readiness_label = QLabel("Player readiness: ")
         main_layout.addWidget(self.readiness_label)
@@ -54,7 +54,6 @@ class ButtonGrid(QWidget):
             button.ship_production = random.randint(1, 10)
             button.defense_factor = round(random.uniform(0.7, 1.0), 2)
             button.owner = None
-            button.setStyleSheet("background-color: #FFFFFF;")
             self.grid.addWidget(button, pos[0], pos[1])
             button.installEventFilter(self)
         main_layout.addLayout(self.grid)
@@ -64,7 +63,6 @@ class ButtonGrid(QWidget):
         self.input_field.setMinimumHeight(40)
         self.next_turn_button = QPushButton("Next Turn")
         self.next_turn_button.setMinimumHeight(40)
-        self.next_turn_button.setStyleSheet("background-color: #a11a1a; color: white;")  # Always red
         self.next_turn_button.clicked.connect(self.readyNextTurn)
         change_owner_button = QPushButton("Change Owner")
         change_owner_button.setMinimumHeight(40)
@@ -514,6 +512,14 @@ class ButtonGrid(QWidget):
             self.next_turn_button.setStyleSheet("background-color: #1a7f1a; color: white;")
         else:
             self.next_turn_button.setStyleSheet("background-color: #a11a1a; color: white;")
+    
+    def set_next_turn_button_color(self, ready):
+        if ready:
+            # Green text, white background
+            self.next_turn_button.setStyleSheet("background-color: #ffffff; color: #1a7f1a; font-weight: bold;")
+        else:
+            # Red text, white background
+            self.next_turn_button.setStyleSheet("background-color: #ffffff; color: #a11a1a; font-weight: bold;")
     
 # New integrated class: MultiGrid combines multiple ButtonGrids and handles arrow key navigation.
 class MultiGrid(QWidget):

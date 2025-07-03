@@ -25,8 +25,22 @@ from ui.game_ui import GameUI
 from network.client import GameClient
 from ui.auth_dialog import AuthDialog
 
+dark_stylesheet = """
+    QWidget { background-color: #111; color: #fff; }
+    QMainWindow { background-color: #111; }
+    QLineEdit, QTextEdit { background-color: #222; color: #fff; border: 1px solid #444; }
+    QPushButton { background-color: #222; color: #fff; border: 1px solid #444; }
+    QPushButton:disabled { background-color: #333; color: #888; }
+    QLabel { color: #fff; }
+    QListWidget, QComboBox, QSpinBox { background-color: #222; color: #fff; border: 1px solid #444; }
+    QMenu { background-color: #222; color: #fff; }
+    QDialog { background-color: #111; color: #fff; }
+    QTableWidget, QHeaderView::section { background-color: #222; color: #fff; }
+"""
+
 def main():
     app = QApplication(sys.argv)
+    app.setStyleSheet(dark_stylesheet)
 
     # Prompt for server address
     default_url = "http://localhost:5000/api"
