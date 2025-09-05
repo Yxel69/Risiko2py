@@ -10,6 +10,25 @@ import os
 import csv
 import requests
 
+# --- new helper ----------------------------------------------------------------
+def invert_color(hex_color: str) -> str:
+    """
+    Return the literal inverse color of hex_color (e.g. #112233 -> #EEDDCC).
+    Accepts '#RRGGBB' (also tolerates without '#').
+    """
+    if not hex_color:
+        return "#000000"
+    c = hex_color.lstrip('#')
+    if len(c) == 3:
+        c = ''.join(2 * ch for ch in c)
+    try:
+        r = 255 - int(c[0:2], 16)
+        g = 255 - int(c[2:4], 16)
+        b = 255 - int(c[4:6], 16)
+        return f"#{r:02x}{g:02x}{b:02x}"
+    except Exception:
+        return "#000000"
+
 class ButtonGrid(QWidget):
     def __init__(self, num_buttons=80, owners=None, button_coords=None, owner_colors=None):
         super().__init__()
@@ -54,6 +73,8 @@ class ButtonGrid(QWidget):
             button.ship_production = random.randint(1, 10)
             button.defense_factor = round(random.uniform(0.7, 1.0), 2)
             button.owner = None
+            # Ensure unowned buttons get explicit bg+text so text is visible
+            self.update_button_color(button)
             self.grid.addWidget(button, pos[0], pos[1])
             button.installEventFilter(self)
         main_layout.addLayout(self.grid)
@@ -408,7 +429,8 @@ class ButtonGrid(QWidget):
                 new_state = response.json().get("state")
                 self.update_from_state(new_state)
                 # --- Set button green after declaring readiness ---
-                self.next_turn_button.setStyleSheet("background-color: #1a7f1a; color: white;")
+                bg = "#1a7f1a"
+                self.next_turn_button.setStyleSheet(f"background-color: {bg}; color: {invert_color(bg)};")
             else:
                 QMessageBox.warning(self, "Error", f"Failed to mark ready: {response.text}")
         else:
@@ -461,9 +483,14 @@ class ButtonGrid(QWidget):
 
     def update_button_color(self, button):
         if button.owner and button.owner in self.owner_colors:
-            button.setStyleSheet(f"background-color: {self.owner_colors[button.owner]};")
+            bg = self.owner_colors[button.owner]
+            # text = inverse for owner-colored buttons
+            text_col = invert_color(bg)
         else:
-            button.setStyleSheet("background-color: #FFFFFF;")
+            # Unowned: white background, force black text so it's always visible
+            bg = "#FFFFFF"
+            text_col = "#000000"
+        button.setStyleSheet(f"background-color: {bg}; color: {text_col};")
 
     def update_from_state(self, state):
         import json
@@ -500,7 +527,8 @@ class ButtonGrid(QWidget):
 
         # --- Set button red if year has advanced ---
         if year != prev_year:
-            self.next_turn_button.setStyleSheet("background-color: #a11a1a; color: white;")
+            bg = "#a11a1a"
+            self.next_turn_button.setStyleSheet(f"background-color: {bg}; color: {invert_color(bg)};")
 
     def update_next_turn_button_color(self):
         # Check if the current owner is ready (in self.ready_set or via server state if available)
@@ -509,17 +537,16 @@ class ButtonGrid(QWidget):
             ready = self.player_owner in self.ready_set
         # If you have a more up-to-date state (e.g. from server), check there instead.
         if ready:
-            self.next_turn_button.setStyleSheet("background-color: #1a7f1a; color: white;")
+            bg = "#1a7f1a"
         else:
-            self.next_turn_button.setStyleSheet("background-color: #a11a1a; color: white;")
+            bg = "#a11a1a"
+        self.next_turn_button.setStyleSheet(f"background-color: {bg}; color: {invert_color(bg)};")
     
     def set_next_turn_button_color(self, ready):
-        if ready:
-            # Green text, white background
-            self.next_turn_button.setStyleSheet("background-color: #ffffff; color: #1a7f1a; font-weight: bold;")
-        else:
-            # Red text, white background
-            self.next_turn_button.setStyleSheet("background-color: #ffffff; color: #a11a1a; font-weight: bold;")
+        bg = "#ffffff" if ready else "#ffffff"
+        # text color must be inverse of background
+        text = invert_color(bg)
+        self.next_turn_button.setStyleSheet(f"background-color: {bg}; color: {text}; font-weight: bold;")
     
 # New integrated class: MultiGrid combines multiple ButtonGrids and handles arrow key navigation.
 class MultiGrid(QWidget):
@@ -930,7 +957,9 @@ class PlayerColorWidget(QHBoxLayout):
             self.update_btn_color()
 
     def update_btn_color(self):
-        self.color_btn.setStyleSheet(f"background-color: {self.color.name()};")
+        # ensure inverse text color for button label
+        bg = self.color.name()
+        self.color_btn.setStyleSheet(f"background-color: {bg}; color: {invert_color(bg)};")
 
     def get_color(self):
         return self.color.name()

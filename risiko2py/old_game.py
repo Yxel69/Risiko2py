@@ -53,7 +53,7 @@ class ButtonGrid(QWidget):
             button.ship_production = random.randint(1, 10)
             button.defense_factor = round(random.uniform(0.7, 1.0), 2)
             button.owner = None
-            button.setStyleSheet("background-color: #FFFFFF;")
+            button.setStyleSheet("background-color: #FFFFFF; color: #000000;")
             
             self.grid.addWidget(button, pos[0], pos[1])
             button.installEventFilter(self)
@@ -167,7 +167,8 @@ class ButtonGrid(QWidget):
         for sys_id, button in self.buttons.items():
             if button.owner is None and random.random() < 0.35:
                 button.owner = "Pirates"
-                button.setStyleSheet("background-color: #FFFFFF;")
+                # Unowned-style (white) with black text
+                button.setStyleSheet("background-color: #FFFFFF; color: #000000;")
 
     def nextTurn(self):
         # Increase production on each system.
@@ -478,7 +479,8 @@ class ButtonGrid(QWidget):
                         if button.owner == self.player_owner:
                             button.setStyleSheet(f"background-color: {self.player_color};")
                         else:
-                            button.setStyleSheet("background-color: #FFFFFF;")
+                            # ensure unowned buttons show black text
+                            button.setStyleSheet("background-color: #FFFFFF; color: #000000;")
             if system_rows:
                 self.year = int(system_rows[0][7])
             self.fleets.clear()
@@ -681,7 +683,8 @@ class MultiGrid(QWidget):
                                 if button.owner in owner_colors:
                                     button.setStyleSheet(f"background-color: {owner_colors[button.owner]};")
                                 else:
-                                    button.setStyleSheet("background-color: #FFFFFF;")
+                                    # unowned: white + black text
+                                    button.setStyleSheet("background-color: #FFFFFF; color: #000000;")
                                 self.grids[idx].year = int(row[7])
             except Exception as e:
                 QMessageBox.warning(self, "Load Error", f"Failed to load systems for galaxy {idx}: {e}")
@@ -775,7 +778,8 @@ def loadGameFromFile():
                     if button.owner in owner_colors:
                         button.setStyleSheet(f"background-color: {owner_colors[button.owner]};")
                     else:
-                        button.setStyleSheet("background-color: #FFFFFF;")
+                        # unowned: white + black text
+                        button.setStyleSheet("background-color: #FFFFFF; color: #000000;")
             except Exception as e:
                 QMessageBox.warning(None, "Load Error", f"Error in a system row of {gdir}: {e}")
         # Load fleets data
