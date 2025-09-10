@@ -34,8 +34,7 @@ def login():
     if not user or not verify_password(user.password, password):
         return jsonify({"msg": "Invalid credentials."}), 401
 
-    # Use integer identity so get_jwt_identity() is numeric on the server and client.
-    access_token = create_access_token(identity=user.id)
+    access_token = create_access_token(identity=str(user.id))
     return jsonify(access_token=access_token), 200
 
 @user_bp.route('/user', methods=['GET'])

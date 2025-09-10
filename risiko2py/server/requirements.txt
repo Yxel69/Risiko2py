@@ -4,4 +4,3 @@ Flask-JWT-Extended
 Flask-Cors
 psycopg2-binary
 python-dotenv
-Flask-Talisman
