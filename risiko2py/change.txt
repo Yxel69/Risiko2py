@@ -1,0 +1,9 @@
+Needed changes
+
+
+
+:
+Link in game players with the user login 
+Force User to Login only, each database account can only play as itself.
+remove change owner button.
+check for readiness status and display the current readiness of all players inside the game. talk to the server and update the readiness status of all players on the client system with each readiness status send to the server.

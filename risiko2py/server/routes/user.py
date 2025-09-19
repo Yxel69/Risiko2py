@@ -34,7 +34,8 @@ def login():
     if not user or not verify_password(user.password, password):
         return jsonify({"msg": "Invalid credentials."}), 401
 
-    access_token = create_access_token(identity=str(user.id))
+    # Return integer identity so get_jwt_identity() yields an int
+    access_token = create_access_token(identity=user.id)
     return jsonify(access_token=access_token), 200
 
 @user_bp.route('/user', methods=['GET'])
@@ -47,3 +48,14 @@ def get_user():
         return jsonify({"username": user.username}), 200
 
     return jsonify({"msg": "User not found."}), 404
+
+@user_bp.route('/user/list', methods=['GET'])
+@jwt_required()
+def list_users():
+    """Returns a list of registered users."""
+    q = (request.args.get('q') or "").strip()
+    query = User.query
+    if q:
+        query = query.filter(User.username.ilike(f"%{q}%"))
+    users = query.limit(200).all()
+    return jsonify([{"id": u.id, "username": u.username} for u in users]), 200

@@ -6,6 +6,7 @@ class AuthDialog(QDialog):
         super().__init__()
         self.api_url = api_url
         self.token = None
+        self.username = None
         self.setWindowTitle("Login/Register")
         self.layout = QVBoxLayout()
         self.username_input = QLineEdit()
@@ -24,20 +25,46 @@ class AuthDialog(QDialog):
         self.setLayout(self.layout)
 
     def login(self):
-        username = self.username_input.text()
+        username = self.username_input.text().strip()
         password = self.password_input.text()
-        response = requests.post(f"{self.api_url}/user/login", json={"username": username, "password": password})
-        if response.status_code == 200:
-            self.token = response.json()["access_token"]
+        try:
+            response = requests.post(f"{self.api_url}/user/login", json={"username": username, "password": password}, timeout=10)
+        except Exception as e:
+            QMessageBox.warning(self, "Login Failed", f"Network error: {e}")
+            return
+
+        try:
+            data = response.json()
+        except Exception:
+            QMessageBox.warning(self, "Login Failed", f"Server returned invalid response ({response.status_code}):\n{response.text}")
+            return
+
+        if response.status_code == 200 and "access_token" in data:
+            self.token = data["access_token"]
+            self.username = username
             self.accept()
         else:
-            QMessageBox.warning(self, "Login Failed", response.json().get("msg", "Unknown error"))
+            QMessageBox.warning(self, "Login Failed", data.get("msg", response.text))
 
     def register(self):
-        username = self.username_input.text()
+        username = self.username_input.text().strip()
         password = self.password_input.text()
-        response = requests.post(f"{self.api_url}/user/register", json={"username": username, "password": password})
+        try:
+            response = requests.post(f"{self.api_url}/user/register", json={"username": username, "password": password}, timeout=10)
+        except Exception as e:
+            QMessageBox.warning(self, "Registration Failed", f"Network error: {e}")
+            return
+
+        try:
+            data = response.json()
+        except Exception:
+            if response.status_code == 201:
+                QMessageBox.information(self, "Registration Successful", "You can now log in.")
+            else:
+                QMessageBox.warning(self, "Registration Failed", f"Server returned ({response.status_code}):\n{response.text}")
+            return
+
         if response.status_code == 201:
             QMessageBox.information(self, "Registration Successful", "You can now log in.")
         else:
-            QMessageBox.warning(self, "Registration Failed", response.json().get("msg", "Unknown error"))
+            QMessageBox.warning(self, "Registration Failed", data.get("msg", response.text))

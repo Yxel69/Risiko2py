@@ -42,9 +42,11 @@ def main():
     app = QApplication(sys.argv)
     app.setStyleSheet(dark_stylesheet)
 
-    # Prompt for server address
-    default_url = "http://risiko2.shroomy.ac"
-    api_url, ok = QInputDialog.getText(None, "Server Address", "Enter server API URL:", text=default_url)
+    # Update: Include /api in the default URL
+    default_url = "http://risiko2.shroomy.ac/api"
+    api_url, ok = QInputDialog.getText(None, "Server Address", 
+        "Enter server API URL (include /api):", 
+        text=default_url)
     if not ok or not api_url.strip():
         QMessageBox.critical(None, "No Server", "You must enter a server address to continue.")
         sys.exit(1)

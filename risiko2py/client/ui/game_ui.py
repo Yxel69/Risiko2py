@@ -1,9 +1,9 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QGridLayout, QMenu,
-    QMessageBox, QInputDialog, QDialog, QFileDialog, QStackedWidget, QListWidget
+    QMessageBox, QInputDialog, QDialog, QFileDialog, QStackedWidget, QListWidget, QComboBox, QSpinBox
 )
 from PyQt5.QtCore import Qt, QEvent
-from PyQt5.QtGui import QIcon, QGuiApplication
+from PyQt5.QtGui import QIcon, QGuiApplication, QColor
 import random
 import math
 import os
@@ -625,12 +625,17 @@ class MultiGrid(QWidget):
             super().keyPressEvent(event)
             
 class GameSetupDialog(QDialog):
-    def __init__(self, parent=None):
+    """
+    New game creation dialog that fetches registered users from server and allows searching.
+    Selected users become in-game players. The creator must select which player is their own account.
+    """
+    def __init__(self, parent=None, client=None):
         super().__init__(parent)
+        self.client = client
         self.setWindowTitle("Game Setup")
         self.layout = QVBoxLayout()
 
-        # Number of Galaxies
+        # Basic options
         galaxy_layout = QHBoxLayout()
         galaxy_label = QLabel("Number of Galaxies:")
         self.galaxy_spin = QSpinBox()
@@ -641,7 +646,6 @@ class GameSetupDialog(QDialog):
         galaxy_layout.addWidget(self.galaxy_spin)
         self.layout.addLayout(galaxy_layout)
 
-        # Number of Planets
         planet_layout = QHBoxLayout()
         planet_label = QLabel("Planets per Galaxy:")
         self.planet_spin = QSpinBox()
@@ -652,18 +656,43 @@ class GameSetupDialog(QDialog):
         planet_layout.addWidget(self.planet_spin)
         self.layout.addLayout(planet_layout)
 
-        # Player names and color pickers
-        self.player_color_widgets = []
-        player_layout = QVBoxLayout()
-        player_label = QLabel("Players (comma separated):")
-        self.player_edit = QLineEdit()
-        self.player_edit.setPlaceholderText("Alice, Bob, ...")
-        self.player_edit.textChanged.connect(self.update_player_colors)
-        player_layout.addWidget(player_label)
-        player_layout.addWidget(self.player_edit)
-        self.layout.addLayout(player_layout)
-        self.colors_layout = QVBoxLayout()
-        self.layout.addLayout(self.colors_layout)
+        # Player search and pick
+        search_layout = QHBoxLayout()
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search users...")
+        self.search_input.returnPressed.connect(self.perform_search)
+        search_btn = QPushButton("Search")
+        search_btn.clicked.connect(self.perform_search)
+        search_layout.addWidget(self.search_input)
+        search_layout.addWidget(search_btn)
+        self.layout.addLayout(search_layout)
+
+        lists_layout = QHBoxLayout()
+        self.results_list = QListWidget()
+        self.results_list.setSelectionMode(QListWidget.SingleSelection)
+        lists_layout.addWidget(self.results_list)
+
+        middle_btns = QVBoxLayout()
+        add_btn = QPushButton("Add →")
+        add_btn.clicked.connect(self.add_selected_user)
+        remove_btn = QPushButton("← Remove")
+        remove_btn.clicked.connect(self.remove_selected_player)
+        middle_btns.addWidget(add_btn)
+        middle_btns.addWidget(remove_btn)
+        middle_btns.addStretch()
+        lists_layout.addLayout(middle_btns)
+
+        self.selected_list = QListWidget()
+        lists_layout.addWidget(self.selected_list)
+
+        self.layout.addLayout(lists_layout)
+
+        # Creator owner selection
+        owner_layout = QHBoxLayout()
+        owner_layout.addWidget(QLabel("You will play as:"))
+        self.creator_combo = QComboBox()
+        owner_layout.addWidget(self.creator_combo)
+        self.layout.addLayout(owner_layout)
 
         # OK/Cancel
         btn_box = QHBoxLayout()
@@ -677,33 +706,67 @@ class GameSetupDialog(QDialog):
 
         self.setLayout(self.layout)
 
-    def update_player_colors(self):
-        # Remove old widgets
-        while self.colors_layout.count():
-            item = self.colors_layout.takeAt(0)
-            widget = item.layout()
-            if widget:
-                while widget.count():
-                    w = widget.takeAt(0).widget()
-                    if w:
-                        w.deleteLater()
-        self.player_color_widgets.clear()
-        names = [p.strip() for p in self.player_edit.text().split(",") if p.strip()]
-        for name in names:
-            # Generate a random color for each player
-            color = QColor.fromHsvF(hash(name) % 360 / 360.0, 0.7, 0.9)
-            pcw = PlayerColorWidget(name, color)
-            self.colors_layout.addLayout(pcw)
-            self.player_color_widgets.append(pcw)
+        # initial search (empty -> list many users)
+        self.perform_search()
+
+    def perform_search(self):
+        q = self.search_input.text().strip()
+        if not self.client or not getattr(self.client, 'token', None) or not getattr(self.client, 'api_url', None):
+            QMessageBox.warning(self, "Error", "Client not authenticated for user search.")
+            return
+        headers = {"Authorization": f"Bearer {self.client.token}"}
+        try:
+            # Fix: Remove duplicated /api/ from URL construction
+            api_url = self.client.api_url.rstrip('/')
+            resp = requests.get(f"{api_url}/user/list", params={"q": q}, headers=headers, timeout=5)
+        except Exception as e:
+            QMessageBox.warning(self, "Search Error", f"Network error: {e}")
+            return
+        if resp.status_code != 200:
+            QMessageBox.warning(self, "Search Error", f"Failed to fetch users: {resp.text}")
+            return
+        users = resp.json()
+        self.results_list.clear()
+        for u in users:
+            self.results_list.addItem(u["username"])
+
+    def add_selected_user(self):
+        item = self.results_list.currentItem()
+        if not item:
+            return
+        username = item.text()
+        # avoid duplicates
+        if any(self.selected_list.item(i).text() == username for i in range(self.selected_list.count())):
+            return
+        self.selected_list.addItem(username)
+        self.update_creator_combo()
+
+    def remove_selected_player(self):
+        item = self.selected_list.currentItem()
+        if item:
+            self.selected_list.takeItem(self.selected_list.row(item))
+            self.update_creator_combo()
+
+    def update_creator_combo(self):
+        # Keep selected creator if possible, otherwise default to logged-in username if present
+        current = self.creator_combo.currentText()
+        self.creator_combo.clear()
+        for i in range(self.selected_list.count()):
+            self.creator_combo.addItem(self.selected_list.item(i).text())
+        # Try to restore previous selection or default to client.username
+        if current and current in [self.creator_combo.itemText(i) for i in range(self.creator_combo.count())]:
+            self.creator_combo.setCurrentText(current)
+        elif getattr(self.client, "username", None) and self.client.username in [self.creator_combo.itemText(i) for i in range(self.creator_combo.count())]:
+            self.creator_combo.setCurrentText(self.client.username)
 
     def get_params(self):
-        players = [p.strip() for p in self.player_edit.text().split(",") if p.strip()]
-        colors = [w.get_color() for w in self.player_color_widgets]
+        players = [self.selected_list.item(i).text() for i in range(self.selected_list.count())]
+        creator_owner = self.creator_combo.currentText() if self.creator_combo.count() > 0 else getattr(self.client, "username", None)
         return {
             "galaxies": self.galaxy_spin.value(),
             "planets": self.planet_spin.value(),
             "players": players,
-            "colors": colors
+            "creator_owner": creator_owner
         }
 
 class GameUI(QWidget):
@@ -758,7 +821,7 @@ class GameUI(QWidget):
             QMessageBox.warning(self, "Error", "Client not authenticated.")
             return
 
-        dialog = GameSetupDialog(self)
+        dialog = GameSetupDialog(self, client=self.client)
         if (dialog.exec_() != QDialog.Accepted):
             return
         params = dialog.get_params()
@@ -773,7 +836,7 @@ class GameUI(QWidget):
                 "players": params["players"],
                 "galaxies": params["galaxies"],
                 "planets": params["planets"],
-                "colors": params["colors"]  
+                "creator_owner": params.get("creator_owner")
             },
             headers=headers
         )
@@ -963,86 +1026,4 @@ class PlayerColorWidget(QHBoxLayout):
 
     def get_color(self):
         return self.color.name()
-
-class GameSetupDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Game Setup")
-        self.layout = QVBoxLayout()
-
-        # Number of Galaxies
-        galaxy_layout = QHBoxLayout()
-        galaxy_label = QLabel("Number of Galaxies:")
-        self.galaxy_spin = QSpinBox()
-        self.galaxy_spin.setMinimum(1)
-        self.galaxy_spin.setMaximum(10)
-        self.galaxy_spin.setValue(1)
-        galaxy_layout.addWidget(galaxy_label)
-        galaxy_layout.addWidget(self.galaxy_spin)
-        self.layout.addLayout(galaxy_layout)
-
-        # Number of Planets
-        planet_layout = QHBoxLayout()
-        planet_label = QLabel("Planets per Galaxy:")
-        self.planet_spin = QSpinBox()
-        self.planet_spin.setMinimum(10)
-        self.planet_spin.setMaximum(200)
-        self.planet_spin.setValue(80)
-        planet_layout.addWidget(planet_label)
-        planet_layout.addWidget(self.planet_spin)
-        self.layout.addLayout(planet_layout)
-
-        # Player names and color pickers
-        self.player_color_widgets = []
-        player_layout = QVBoxLayout()
-        player_label = QLabel("Players (comma separated):")
-        self.player_edit = QLineEdit()
-        self.player_edit.setPlaceholderText("Alice, Bob, ...")
-        self.player_edit.textChanged.connect(self.update_player_colors)
-        player_layout.addWidget(player_label)
-        player_layout.addWidget(self.player_edit)
-        self.layout.addLayout(player_layout)
-        self.colors_layout = QVBoxLayout()
-        self.layout.addLayout(self.colors_layout)
-
-        # OK/Cancel
-        btn_box = QHBoxLayout()
-        ok_btn = QPushButton("OK")
-        ok_btn.clicked.connect(self.accept)
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.clicked.connect(self.reject)
-        btn_box.addWidget(ok_btn)
-        btn_box.addWidget(cancel_btn)
-        self.layout.addLayout(btn_box)
-
-        self.setLayout(self.layout)
-
-    def update_player_colors(self):
-        # Remove old widgets
-        while self.colors_layout.count():
-            item = self.colors_layout.takeAt(0)
-            widget = item.layout()
-            if widget:
-                while widget.count():
-                    w = widget.takeAt(0).widget()
-                    if w:
-                        w.deleteLater()
-        self.player_color_widgets.clear()
-        names = [p.strip() for p in self.player_edit.text().split(",") if p.strip()]
-        for name in names:
-            # Generate a random color for each player
-            color = QColor.fromHsvF(hash(name) % 360 / 360.0, 0.7, 0.9)
-            pcw = PlayerColorWidget(name, color)
-            self.colors_layout.addLayout(pcw)
-            self.player_color_widgets.append(pcw)
-
-    def get_params(self):
-        players = [p.strip() for p in self.player_edit.text().split(",") if p.strip()]
-        colors = [w.get_color() for w in self.player_color_widgets]
-        return {
-            "galaxies": self.galaxy_spin.value(),
-            "planets": self.planet_spin.value(),
-            "players": players,
-            "colors": colors
-        }
 
