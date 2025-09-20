@@ -15,45 +15,17 @@ def start_game():
     if not data or 'players' not in data:
         return jsonify({'msg': 'Missing players data'}), 400
 
-    players = data['players']           # expected: list of usernames (strings)
+    players = data['players']
     galaxies = data.get('galaxies', 1)
     planets = data.get('planets', 80)
-    creator_owner = data.get('creator_owner')  # username the creator chooses to play as
     user_id = get_jwt_identity()
     player_colors = data.get('colors')
 
-    # Resolve player usernames to actual users and build canonical players list
-    resolved_players = []
-    for pname in players:
-        username = pname if isinstance(pname, str) else pname.get("owner")
-        if not username:
-            return jsonify({'msg': 'Invalid player entry'}), 400
-        user = User.query.filter_by(username=username).first()
-        if not user:
-            return jsonify({'msg': f'User not found: {username}'}), 400
-        resolved_players.append({"owner": username, "user_id": user.id, "ready": False})
-
-    # Ensure the creating user is associated with the chosen creator_owner
-    if creator_owner:
-        match = next((p for p in resolved_players if p["owner"] == creator_owner), None)
-        if not match:
-            return jsonify({'msg': 'creator_owner must be one of the selected players'}), 400
-        if match["user_id"] != int(user_id):
-            return jsonify({'msg': 'You must select your own account as the creator_owner'}), 403
+    # Assign a color to each player (use provided or generate)
+    if player_colors and len(player_colors) == len(players):
+        owner_colors = {player: color for player, color in zip(players, player_colors)}
     else:
-        # If not provided, require that the creator's username is included in players
-        creator_user = User.query.get(user_id)
-        if not creator_user:
-            return jsonify({'msg': 'Creator user not found'}), 400
-        if not any(p["owner"] == creator_user.username for p in resolved_players):
-            return jsonify({'msg': 'Creator must be included in players list or specify creator_owner'}), 400
-        creator_owner = creator_user.username
-
-    # Assign colors (either provided matching order or generate)
-    if player_colors and len(player_colors) == len(resolved_players):
-        owner_colors = {p["owner"]: color for p, color in zip(resolved_players, player_colors)}
-    else:
-        owner_colors = {p["owner"]: "#{:06X}".format(random.randint(0, 0xFFFFFF)) for p in resolved_players}
+        owner_colors = {player: "#{:06X}".format(random.randint(0, 0xFFFFFF)) for player in players}
 
     # --- Generate button coordinates for each galaxy ---
     rows, cols = 40, 15
@@ -66,14 +38,16 @@ def start_game():
             button_coords[i+1] = positions[i]
         galaxy_button_coords[galaxy_index] = button_coords
 
-    # --- Assign each player a starting planet ---
+    # --- Assign each player a starting planet in a different galaxy ---
+    # Cycle through galaxies if there are more players than galaxies
     player_start_planets = {}
-    for idx, p in enumerate(resolved_players):
+    for idx, player in enumerate(players):
         galaxy_index = idx % galaxies
+        # Pick a random system in this galaxy for the player
         system_ids = list(range(1, planets + 1))
         random.shuffle(system_ids)
         chosen_sys = system_ids[0]
-        player_start_planets[p["owner"]] = (galaxy_index, chosen_sys)
+        player_start_planets[player] = (galaxy_index, chosen_sys)
 
     systems = []
     for galaxy_index in range(galaxies):
@@ -82,10 +56,9 @@ def start_game():
             current_ships = 0
             ship_production = random.randint(1, 10)
             defense_factor = round(random.uniform(0.7, 1.0), 2)
-            for player in resolved_players:
-                g_idx, s_id = player_start_planets.get(player["owner"], (None, None))
+            for player, (g_idx, s_id) in player_start_planets.items():
                 if galaxy_index == g_idx and sys_id == s_id:
-                    owner = player["owner"]
+                    owner = player
                     current_ships = 250
                     ship_production = 10
                     defense_factor = 1.0
@@ -109,11 +82,9 @@ def start_game():
         "button_coords": galaxy_button_coords,
         "owner_colors": owner_colors
     }
-
-    # Save players as list of dicts with user_id so server can enforce actions per-account
     game_state = GameState(
         user_id=user_id,
-        players=json.dumps(resolved_players),
+        players=json.dumps(players),
         state=json.dumps(state)
     )
     db.session.add(game_state)
